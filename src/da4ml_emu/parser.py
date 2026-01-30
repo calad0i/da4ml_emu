@@ -16,13 +16,31 @@ def trace_hls4ml_model(model: ModelGraph):
         io_map[layer_name] = (layer, layer.inputs, layer.outputs)
 
     tensor_map: dict[str, FixedVariableArray] = {}
+    inp_tensor_outer: dict[str, FixedVariableArray] = {}
 
     for inp_var in model.get_input_variables():
         shape = inp_var.shape
         precision: FixedPrecisionType = inp_var.type.precision
         k, i, f = precision.signed, precision.integer - precision.signed, precision.fractional
+        SAT, RND = str(precision.saturation_mode), str(precision.rounding_mode)
         k, i, f = (np.full(shape, x, dtype=np.int16) for x in (k, i, f))
-        tensor_map[inp_var.name] = FixedVariableArray.from_kif(k, i, f)
+        if RND == 'RND':
+            _f = f + 1
+        elif RND == 'TRN':
+            _f = f
+        else:
+            raise ValueError(f'Unsupported rounding mode {RND} for input variable {inp_var.name}')
+        if SAT == 'WRAP':
+            _i = i
+        elif SAT == 'SAT':
+            _i = np.full_like(i, 32, dtype=np.int16)
+            print(f'WRAN: input saturation mode {SAT} cannot be perfectly bit-exact, using 32 integer bits inputs')
+        else:
+            raise ValueError(f'Unsupported saturation mode {SAT} for input variable {inp_var.name}')
+
+        t = FixedVariableArray.from_kif(k, _i, _f)
+        inp_tensor_outer[inp_var.name] = t
+        tensor_map[inp_var.name] = t.quantize(k, i, f, round_mode=RND, overflow_mode=SAT)
 
     inp_tensors = list(tensor_map.values())
 
@@ -37,7 +55,7 @@ def trace_hls4ml_model(model: ModelGraph):
     assert model.outputs is not None
     assert model.inputs is not None
 
-    inp_tensors = [tensor_map[name] for name in model.inputs]
+    inp_tensors = [inp_tensor_outer[name] for name in model.inputs]
     out_tensors = [tensor_map[name] for name in model.outputs]
 
     return inp_tensors, out_tensors

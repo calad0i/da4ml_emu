@@ -22,21 +22,6 @@ def apply_precision(precision: FixedPrecisionType, data: np.ndarray):
     return to_quantizer(precision)(data)
 
 
-def hls4ml_dense(
-    w: np.ndarray,
-    b: np.ndarray | None,
-    inp: FixedVariableArray,
-    accum_p: FixedPrecisionType | None,
-) -> FixedVariableArray:
-    if accum_p is not None:
-        accum_q = to_quantizer(accum_p)
-        _out = accum_q(inp[..., None] * w)
-        _out = np.sum(_out, axis=-2) + b
-        return accum_q(_out)
-    else:
-        return inp @ w + b
-
-
 # from hls4ml.model.layers import Input, Dense
 
 

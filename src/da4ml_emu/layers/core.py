@@ -8,7 +8,24 @@ from hls4ml.model.layers import Layer
 from hls4ml.model.optimizer.passes.bit_exact import stride_arrs
 from hls4ml.model.types import FixedPrecisionType
 
-from ._base import BasicDispatcher, hls4ml_dense, to_quantizer
+from ._base import BasicDispatcher, to_quantizer
+
+
+def hls4ml_dense(
+    w: np.ndarray,
+    b: np.ndarray | None,
+    inp: FixedVariableArray,
+    accum_p: FixedPrecisionType | None,
+) -> FixedVariableArray:
+    if accum_p is not None:
+        accum_q = to_quantizer(accum_p)
+        out = accum_q(b)
+        for i in range(w.shape[0]):
+            _out = accum_q(inp[...,i, None] * w[i, :])
+            out = accum_q(out + _out)
+        return out
+    else:
+        return inp @ w + b
 
 
 class _Dense(BasicDispatcher):
@@ -111,8 +128,6 @@ class Activation(BasicDispatcher):
         return out
 
 
-
-
 class _Softmax(BasicDispatcher):
     layer_type = hls4ml.model.layers.Softmax
 
@@ -123,7 +138,7 @@ class _Softmax(BasicDispatcher):
         impl = layer.attributes['implementation']
 
         if impl == 'argmax':
-            return np.max(inp, axis=-1) # type: ignore
+            return np.max(inp, axis=-1)  # type: ignore
         assert impl in ('stable', 'latency')
 
         fn_name = layer.attributes['activation']
@@ -137,7 +152,7 @@ class _Softmax(BasicDispatcher):
         inv_table_size = layer.attributes.get('inv_table_size', _table_size)
         _B_exp, _B_inv = log2(int(exp_table_size)), log2(int(inv_table_size))
         B_exp, B_inv = int(_B_exp), int(_B_inv)
-        assert B_exp == _B_exp and B_inv == _B_inv, "exp_table_size and inv_table_size must be powers of 2"
+        assert B_exp == _B_exp and B_inv == _B_inv, 'exp_table_size and inv_table_size must be powers of 2'
 
         exp_table_q = to_quantizer(layer.attributes['exp_table_t'].precision)
         inv_table_q = to_quantizer(layer.attributes['inv_table_t'].precision)
@@ -146,29 +161,29 @@ class _Softmax(BasicDispatcher):
 
         if impl == 'stable':
             if 'inp_norm_t' in layer.attributes:
-                inp_norm_p:FixedPrecisionType = layer.attributes['inp_norm_t'].precision
+                inp_norm_p: FixedPrecisionType = layer.attributes['inp_norm_t'].precision
             else:
-                input_t:FixedPrecisionType = layer.get_input_variable().type.precision
+                input_t: FixedPrecisionType = layer.get_input_variable().type.precision
                 inp_norm_p = FixedPrecisionType(input_t.width, input_t.integer, False)
             inp_norm_q = to_quantizer(inp_norm_p)
-            _max = np.max(inp, axis=-1, keepdims=True) # type: ignore
+            _max = np.max(inp, axis=-1, keepdims=True)  # type: ignore
             inp_norm = inp_norm_q(_max - inp)
-            k,I = inp_norm_p.signed, inp_norm_p.integer
-            i = I-k
-            f = B_exp - I
-            _exp = inp_norm.quantize(k,i,f).apply(lambda x: np.exp(-x))
-        else:
-            inp_p: FixedPrecisionType = layer.get_input_variable().type.precision
-            k,I = inp_p.signed, inp_p.integer
+            k, I = inp_norm_p.signed, inp_norm_p.integer
             i = I - k
             f = B_exp - I
-            _exp = np.exp(inp.quantize(k,i,f))
+            _exp = inp_norm.quantize(k, i, f).apply(lambda x: np.exp(-x))
+        else:
+            inp_p: FixedPrecisionType = layer.get_input_variable().type.precision
+            k, I = inp_p.signed, inp_p.integer
+            i = I - k
+            f = B_exp - I
+            _exp = np.exp(inp.quantize(k, i, f))
         _exp = accum_q(exp_table_q(_exp))
         _sum = accum_q(np.sum(_exp, axis=-1, keepdims=True))
 
-        inp_inp_t :FixedPrecisionType= layer.attributes['inv_inp_t'].precision
-        k,I = inp_inp_t.signed, inp_inp_t.integer
+        inp_inp_t: FixedPrecisionType = layer.attributes['inv_inp_t'].precision
+        k, I = inp_inp_t.signed, inp_inp_t.integer
         i = I - k
         f = B_inv - I
-        inv = inv_table_q(_sum.quantize(k,i,f).apply(lambda x: 1/(x+1e-12)))
+        inv = inv_table_q(_sum.quantize(k, i, f).apply(lambda x: 1 / (x + 1e-12)))
         return _exp * inv
