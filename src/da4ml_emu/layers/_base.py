@@ -7,7 +7,7 @@ from hls4ml.backends.fpga.fpga_types import FixedPrecisionType
 from hls4ml.model.layers import Layer
 
 
-def to_quantizer(precision: FixedPrecisionType|None):
+def to_quantizer(precision: FixedPrecisionType | None):
     if precision is None:
         return lambda x: x
     width = precision.width

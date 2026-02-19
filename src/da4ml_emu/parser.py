@@ -1,4 +1,4 @@
-from typing import Sequence
+from collections.abc import Sequence
 
 import hls4ml.model.layers
 from da4ml.converter.plugin import DAISTracerPluginBase

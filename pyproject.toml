@@ -1,15 +1,15 @@
 [build-system]
 build-backend = "setuptools.build_meta"
 
-requires = ["setuptools>=67.8", "setuptools-scm>=8"]
+requires = [ "setuptools>=67.8", "setuptools-scm>=8" ]
 
 [project]
 name = "hls4ml-da4ml-backend"
 description = "da4ml provider for hls4ml"
 readme = "README.md"
-keywords = ["da4ml", "hls4ml"]
+keywords = [ "da4ml", "hls4ml" ]
 license = { text = "GNU Lesser General Public License v3 (LGPLv3)" }
-authors = [{ name = "Chang Sun", email = "chsun@cern.ch" }]
+authors = [ { name = "Chang Sun", email = "chsun@cern.ch" } ]
 requires-python = ">=3.10"
 classifiers = [
   "Development Status :: 4 - Beta",
@@ -22,13 +22,15 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
 ]
-dynamic = ["version"]
+dynamic = [ "version" ]
 
-dependencies = ["da4ml", "hls4ml"]
+dependencies = [ "da4ml", "hls4ml" ]
 urls.repository = "https://github.com/calad0i/hls4ml-da4ml-backend"
 
+entry-points."dais_tracer.plugins".hls4ml = "da4ml_emu.parser:hls4mlTracer"
+
 [tool.setuptools]
-packages = ["da4ml_emu"]
+packages = [ "da4ml_emu" ]
 include-package-data = true
 package-dir = { "" = "src" }
 
@@ -41,15 +43,15 @@ target-version = "py310"
 line-length = 130
 indent-width = 4
 
-include = ["src/da4ml_emu/**/*.py"]
+include = [ "src/da4ml_emu/**/*.py" ]
 
 format.indent-style = "space"
 format.quote-style = "single"
 format.skip-magic-trailing-comma = false
 format.docstring-code-line-length = 130
 format.docstring-code-format = true
-lint.select = ["E", "F", "F401", "I", "W"]
-lint.ignore = ["E501", "F403", "F405"]
+lint.select = [ "E", "F", "F401", "I", "W" ]
+lint.ignore = [ "E501", "E731", "E741", "F403", "F405" ]
 lint.explicit-preview-rules = true
-lint.fixable = ["ALL"]
-lint.unfixable = []
+lint.fixable = [ "ALL" ]
+lint.unfixable = [  ]
