@@ -7,7 +7,9 @@ from hls4ml.backends.fpga.fpga_types import FixedPrecisionType
 from hls4ml.model.layers import Layer
 
 
-def to_quantizer(precision: FixedPrecisionType):
+def to_quantizer(precision: FixedPrecisionType|None):
+    if precision is None:
+        return lambda x: x
     width = precision.width
     integer = precision.integer
     signed = precision.signed
@@ -26,7 +28,7 @@ def apply_precision(precision: FixedPrecisionType, data: np.ndarray):
 
 
 @singledispatch
-def dispatch_layer(layer: Layer, inputs: list[FixedVariableArray]) -> FixedVariableArray:
+def dispatch_layer(layer: Layer, inputs: list[FixedVariableArray], optimize: bool) -> FixedVariableArray:
     raise NotImplementedError(f'Layer type {type(layer)} not implemented in dispatcher')
 
 
@@ -41,8 +43,8 @@ class BasicDispatcherMeta(type):
 class BasicDispatcher(metaclass=BasicDispatcherMeta):
     layer_type = None
 
-    def __call__(self, layer: Layer, inputs: list[FixedVariableArray]) -> FixedVariableArray:
-        r = self.call(layer, inputs)
+    def __call__(self, layer: Layer, inputs: list[FixedVariableArray], optimize: bool) -> FixedVariableArray:
+        r = self.call(layer, inputs, optimize)
         output_precision: FixedPrecisionType = layer.get_output_variable().type.precision
         assert isinstance(output_precision, FixedPrecisionType), (
             f'Output precision of layer {layer.name} is not FixedPrecisionType'
@@ -61,5 +63,5 @@ class BasicDispatcher(metaclass=BasicDispatcherMeta):
         q = to_quantizer(precision)
         return q(np.round(value, precision.fractional))  # first round is for hls4ml print artifact...
 
-    def call(self, layer: Layer, inputs: list[FixedVariableArray]) -> FixedVariableArray:
+    def call(self, layer, inputs: list[FixedVariableArray], optimize: bool) -> FixedVariableArray:
         raise NotImplementedError(f'Dispatcher for layer {layer.name} ({layer.__class__}) not implemented')
