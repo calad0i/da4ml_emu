@@ -152,9 +152,7 @@ class _Softmax(BasicDispatcher):
 
         impl = layer.attributes['implementation']
 
-        if impl == 'argmax':
-            return np.max(inp, axis=-1)  # type: ignore
-        assert impl in ('stable', 'latency')
+        assert impl in ('stable', 'latency'), f'Unknown softmax implementation: {impl}'
 
         _table_size = layer.attributes['table_size']
         exp_table_size = layer.attributes.get('exp_table_size', _table_size)
@@ -174,7 +172,9 @@ class _Softmax(BasicDispatcher):
                 inp_norm_p: FixedPrecisionType = layer.attributes['inp_norm_t'].precision
             else:
                 input_t: FixedPrecisionType = layer.get_input_variable().type.precision
-                inp_norm_p = FixedPrecisionType(input_t.width, input_t.integer, False)
+                s, w, i = input_t.signed, input_t.width, input_t.integer
+                w, i = w - s, i - s  # delete after PR 1428 is merged
+                inp_norm_p = FixedPrecisionType(w, i, False)
             inp_norm_q = to_quantizer(inp_norm_p)
             _max = np.max(inp, axis=-1, keepdims=True)  # type: ignore
             inp_norm = inp_norm_q(_max - inp)
