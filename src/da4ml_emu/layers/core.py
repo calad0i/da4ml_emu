@@ -25,12 +25,14 @@ def hls4ml_dense(
     accum_q = to_quantizer(accum_p)
     b = 0 if b is None else b
     if optimize:
-        assert accum_p is None or (str(accum_p.saturation_mode) == 'WRAP' and str(accum_p.rounding_mode) == 'TRN'), (
-            'Impossible to have DA optimization while bit-exact to non-trivial accum mode'
-        )
-        return accum_q(inp @ w + b)
-    out = accum_q(b)
+        return inp @ w + b
 
+    assert accum_p is not None
+    if str(accum_p.saturation_mode) == 'WRAP' and str(accum_p.rounding_mode) == 'TRN':
+        _out = np.stack([accum_q(accum_q(inp[..., i, None] * w[i, :])) for i in range(w.shape[0])], axis=0)
+        return accum_q(np.sum(_out, axis=0) + accum_q(b))
+
+    out = accum_q(b)
     for i in range(w.shape[0]):
         _out = accum_q(inp[..., i, None] * w[i, :])
         out = accum_q(out + _out)
@@ -52,7 +54,7 @@ class _Dense(BasicDispatcher):
 
 
 class _ConvXD(BasicDispatcher):
-    layer_type = hls4ml.model.layers.Conv1D | hls4ml.model.layers.Conv2D
+    layer_type = hls4ml.model.layers.Conv1D
 
     def call(self, layer: Layer, inputs: list[FixedVariableArray], optimize: bool) -> FixedVariableArray:
         assert len(inputs) == 1
@@ -223,7 +225,7 @@ class _EinsumDense(BasicDispatcher):
             for i in range(I):
                 A = input0[(i * L0 + l0) * C : (i * L0 + l0 + 1) * C]
                 B = input1[i * L1 * C : (i + 1) * L1 * C].reshape((C, L1))
-                _r = hls4ml_dense(B, None, A, accum_p, optimize=optimize)
+                _r = hls4ml_dense(B, None, A, accum_p, optimize=optimize)  # type: ignore
                 output[(i * L0 + l0) * L1 : (i * L0 + l0 + 1) * L1] = _r
 
         output = output + self.get_quantized(layer, 'bias').ravel()
@@ -274,3 +276,10 @@ class _Quantizer(BasicDispatcher):
         i = i[0] if np.ndim(i) > 0 else i
         f = f[0] if np.ndim(f) > 0 else f
         return inp.quantize(k, i, f, round_mode=RND, overflow_mode=SAT)
+
+
+class _Concatenate(BasicDispatcher):
+    layer_type = hls4ml.model.layers.Concatenate
+
+    def call(self, layer: Layer, inputs: list[FixedVariableArray], optimize: bool) -> FixedVariableArray:
+        return np.concatenate(inputs, axis=layer.attributes['axis'])  # type: ignore
